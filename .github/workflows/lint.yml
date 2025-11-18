@@ -1,0 +1,108 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint:
+    name: Lint and Format Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort mypy pylint
+        pip install -e ".[all]"
+
+    - name: Check code formatting with black
+      run: |
+        black --check --diff pqc_migration_auditor/ tests/
+
+    - name: Check import sorting with isort
+      run: |
+        isort --check-only --diff pqc_migration_auditor/ tests/
+
+    - name: Lint with flake8
+      run: |
+        # Stop the build if there are Python syntax errors or undefined names
+        flake8 pqc_migration_auditor/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        # Exit-zero treats all errors as warnings
+        flake8 pqc_migration_auditor/ --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
+
+    - name: Type check with mypy
+      run: |
+        mypy pqc_migration_auditor/ --ignore-missing-imports --no-strict-optional || true
+
+    - name: Lint with pylint
+      run: |
+        pylint pqc_migration_auditor/ --exit-zero --max-line-length=100
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install safety bandit
+        pip install -e .
+
+    - name: Check dependencies for known vulnerabilities
+      run: |
+        safety check --json || true
+
+    - name: Security lint with bandit
+      run: |
+        bandit -r pqc_migration_auditor/ -f json -o bandit-report.json || true
+        bandit -r pqc_migration_auditor/ || true
+
+    - name: Upload bandit results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: bandit-security-report
+        path: bandit-report.json
+
+  docs:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pydocstyle
+
+    - name: Check docstring coverage
+      run: |
+        pydocstyle pqc_migration_auditor/ --count || true

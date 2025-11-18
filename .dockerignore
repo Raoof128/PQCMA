@@ -1,0 +1,88 @@
+# Git and version control
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation and examples (keep minimal)
+docs/
+*.md
+!README.md
+examples/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Reports and output
+reports/
+*.json
+*.html
+!pyproject.toml
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Configuration (keep necessary ones)
+.editorconfig
+.pre-commit-config.yaml
+mypy.ini
+.flake8
+.pylintrc
+
+# Logs
+*.log
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Security
+.secrets.baseline
+*.pem
+*.key
+*.crt
+*.cer
+
+# Temporary files
+tmp/
+temp/
+*.tmp

@@ -2,9 +2,26 @@
 
 > A Python tool that scans code and network captures to identify quantum-vulnerable cryptography and suggest NIST/ASD-aligned post-quantum migration options.
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+<!-- Badges -->
+<div align="center">
+
+[![Python Version](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Code style: professional](https://img.shields.io/badge/code%20style-professional-brightgreen.svg)](https://github.com/yourusername/pqc-migration-auditor)
+[![GitHub Release](https://img.shields.io/github/v/release/Raoof128/PQCMA?include_prereleases)](https://github.com/Raoof128/PQCMA/releases)
+[![CI/CD](https://github.com/Raoof128/PQCMA/actions/workflows/tests.yml/badge.svg)](https://github.com/Raoof128/PQCMA/actions)
+
+[![Code Quality](https://github.com/Raoof128/PQCMA/actions/workflows/lint.yml/badge.svg)](https://github.com/Raoof128/PQCMA/actions)
+[![Security Scan](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Imports: isort](https://img.shields.io/badge/%20imports-isort-%231674b1?style=flat&labelColor=ef8336)](https://pycqa.github.io/isort/)
+
+[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macOS%20%7C%20windows-lightgrey.svg)](https://github.com/Raoof128/PQCMA)
+[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://github.com/Raoof128/PQCMA/blob/main/Dockerfile)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/Raoof128/PQCMA/blob/main/CONTRIBUTING.md)
+[![NIST Aligned](https://img.shields.io/badge/NIST-PQC%20Aligned-blue.svg)](https://csrc.nist.gov/projects/post-quantum-cryptography)
+[![ASD Aligned](https://img.shields.io/badge/ASD-🇦🇺%20Aligned-green.svg)](https://www.cyber.gov.au/)
+
+</div>
 
 ---
 

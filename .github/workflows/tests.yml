@@ -1,0 +1,123 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    name: Test on Python ${{ matrix.python-version }} - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[all,dev]"
+
+    - name: Run basic tests
+      run: |
+        python test_basic.py
+
+    - name: Run pytest unit tests
+      run: |
+        pytest tests/ -v --cov=pqc_migration_auditor --cov-report=xml --cov-report=term
+
+    - name: Run integration tests
+      run: |
+        python test_integration.py
+
+    - name: Upload coverage to Codecov
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  test-minimal:
+    name: Test without optional dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install minimal dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+
+    - name: Test basic functionality without optional deps
+      run: |
+        pqc-audit --version
+        pqc-audit scan examples/dummy_repo --output reports/minimal_test.json --quiet
+
+    - name: Verify graceful degradation
+      run: |
+        # Should work without scapy and cryptography
+        python -c "from pqc_migration_auditor.scanner.code_scanner import CodeScanner; s = CodeScanner(); print('Code scanner works')"
+
+  test-examples:
+    name: Test with example repository
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[all]"
+
+    - name: Scan example vulnerable repository
+      run: |
+        pqc-audit scan examples/dummy_repo --output reports/example_scan.json
+
+    - name: Verify findings detected
+      run: |
+        python -c "
+import json
+with open('reports/example_scan.json') as f:
+    data = json.load(f)
+    findings = data['findings']
+    assert len(findings) > 0, 'No findings detected in vulnerable example code'
+    print(f'✓ Detected {len(findings)} vulnerabilities in example code')
+"
+
+    - name: Upload scan results
+      uses: actions/upload-artifact@v3
+      with:
+        name: example-scan-results
+        path: reports/example_scan.json

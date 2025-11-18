@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # PQC Migration Auditor Scanner Service
+  pqc-auditor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pqc-migration-auditor:latest
+    container_name: pqc-auditor
+
+    # Mount volumes for scanning
+    volumes:
+      # Mount your code to scan
+      - ./examples/dummy_repo:/scan:ro
+      # Mount output directory for reports
+      - ./reports:/reports
+
+    # Override default command
+    command: scan /scan --output /reports/docker-scan.json --verbose
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 512M
+
+    # Environment variables
+    environment:
+      - PYTHONUNBUFFERED=1
+
+    # Network mode
+    network_mode: bridge
+
+    # Restart policy
+    restart: "no"
+
+  # Alternative: Interactive scan service
+  pqc-auditor-interactive:
+    image: pqc-migration-auditor:latest
+    container_name: pqc-auditor-interactive
+    volumes:
+      - .:/workspace:ro
+      - ./reports:/reports
+    working_dir: /workspace
+    command: /bin/bash
+    stdin_open: true
+    tty: true
+    profiles:
+      - interactive
+
+# Named volumes for persistent storage
+volumes:
+  reports:
+    driver: local
+
+# Example usage:
+# Default scan:
+#   docker-compose up
+#
+# Interactive mode:
+#   docker-compose --profile interactive run pqc-auditor-interactive
+#   (then run: pqc-audit scan /workspace --output /reports/scan.json)
+#
+# Custom scan:
+#   docker-compose run pqc-auditor scan /scan --format html --output /reports/report.html
+#
+# PCAP analysis:
+#   docker-compose run -v /path/to/pcaps:/pcaps pqc-auditor pcap /pcaps/capture.pcap --output /reports/pcap.json
