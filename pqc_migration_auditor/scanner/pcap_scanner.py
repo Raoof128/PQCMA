@@ -8,21 +8,33 @@ from ..analysis.recommendations import Finding
 from ..analysis.rules import CryptoKnowledgeBase, RiskLevel
 from ..utils.logging_utils import get_logger
 
+# Try to import scapy, but make it optional
 try:
     from scapy.all import rdpcap, TLS, TLSClientHello, TLSServerHello, TLSCertificate
     from scapy.layers.tls.handshake import TLSClientKeyExchange, TLSServerKeyExchange
     from scapy.layers.x509 import X509_Cert
     SCAPY_AVAILABLE = True
-except ImportError:
+except (ImportError, Exception):
     SCAPY_AVAILABLE = False
+    rdpcap = None
+    TLS = None
+    TLSClientHello = None
+    TLSServerHello = None
+    TLSCertificate = None
 
+# Try to import cryptography for certificate parsing
 try:
     from cryptography import x509
     from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives.asymmetric import rsa, dsa, ec
     CRYPTO_AVAILABLE = True
-except ImportError:
+except (ImportError, Exception):
     CRYPTO_AVAILABLE = False
+    x509 = None
+    default_backend = None
+    rsa = None
+    dsa = None
+    ec = None
 
 
 logger = get_logger(__name__)
@@ -35,6 +47,8 @@ class PCAPScanner:
 
     def __init__(self):
         self.knowledge_base = CryptoKnowledgeBase()
+        if not SCAPY_AVAILABLE:
+            logger.warning("Scapy library not available - PCAP scanning disabled")
 
     def scan_pcap(self, pcap_path: Path) -> List[Finding]:
         """
@@ -161,7 +175,7 @@ class PCAPScanner:
                     findings.append(finding)
 
             # Check for Certificate
-            if packet.haslayer(TLSCertificate):
+            if packet.haslayer(TLSCertificate) and CRYPTO_AVAILABLE:
                 cert_findings = self._analyze_tls_certificate(
                     packet[TLSCertificate],
                     session_id,

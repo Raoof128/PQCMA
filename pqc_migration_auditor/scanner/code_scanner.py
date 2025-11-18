@@ -4,7 +4,7 @@ Code scanner for detecting quantum-vulnerable cryptographic usage in source file
 
 import re
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from ..analysis.recommendations import Finding
 from ..analysis.rules import CryptoKnowledgeBase, RiskLevel
 from ..utils.logging_utils import get_logger
@@ -47,13 +47,26 @@ class CodeScanner:
 
         # Find all scannable files
         scannable_files = find_scannable_files(directory_path, include_certs=False)
-        logger.info(f"Found {len(scannable_files)} files to scan")
+        total_files = len(scannable_files)
+        logger.info(f"Found {total_files} files to scan")
 
-        for file_path in scannable_files:
-            file_findings = self.scan_file(file_path)
-            findings.extend(file_findings)
+        if total_files == 0:
+            logger.warning("No scannable files found in directory")
+            return []
 
-        logger.info(f"Code scan complete: {len(findings)} findings")
+        # Scan each file
+        for idx, file_path in enumerate(scannable_files, 1):
+            if idx % 100 == 0:  # Log progress every 100 files
+                logger.info(f"Progress: {idx}/{total_files} files scanned...")
+
+            try:
+                file_findings = self.scan_file(file_path)
+                findings.extend(file_findings)
+            except Exception as e:
+                logger.warning(f"Error scanning {file_path}: {e}")
+                continue
+
+        logger.info(f"Code scan complete: {len(findings)} findings in {total_files} files")
         return findings
 
     def scan_file(self, file_path: Path) -> List[Finding]:
@@ -96,36 +109,56 @@ class CodeScanner:
             line: Line content
 
         Returns:
-            List of findings in this line
+            List of findings in this line (deduplicated)
         """
         findings: List[Finding] = []
+        seen_algorithms: Set[str] = set()  # Track algorithms found on this line to avoid duplicates
 
         for pattern, algorithm in self.patterns.items():
-            if re.search(pattern, line, re.IGNORECASE):
-                # Determine risk level
-                algo_info = self.knowledge_base.get_algorithm_info(algorithm)
-                risk_level = algo_info.risk_level.value if algo_info else RiskLevel.UNKNOWN.value
+            try:
+                if re.search(pattern, line, re.IGNORECASE):
+                    # Skip if we already found this algorithm on this line
+                    if algorithm in seen_algorithms:
+                        continue
 
-                # Extract key size if present
-                key_size = self._extract_key_size(line)
+                    seen_algorithms.add(algorithm)
 
-                finding = Finding(
-                    finding_type="CODE",
-                    location=f"{file_path}:{line_num}",
-                    algorithm=algorithm,
-                    key_size=key_size,
-                    risk_level=risk_level,
-                    details=line.strip(),
-                    raw_data={
-                        "file": str(file_path),
-                        "line_number": line_num,
-                        "line_content": line.strip(),
-                        "pattern_matched": pattern
-                    }
-                )
+                    # Determine risk level
+                    algo_info = self.knowledge_base.get_algorithm_info(algorithm)
+                    risk_level = algo_info.risk_level.value if algo_info else RiskLevel.UNKNOWN.value
 
-                findings.append(finding)
-                logger.debug(f"Found {algorithm} at {file_path}:{line_num}")
+                    # Extract key size if present
+                    key_size = self._extract_key_size(line)
+
+                    # Truncate long lines for details
+                    details_text = line.strip()
+                    if len(details_text) > 200:
+                        details_text = details_text[:197] + "..."
+
+                    finding = Finding(
+                        finding_type="CODE",
+                        location=f"{file_path}:{line_num}",
+                        algorithm=algorithm,
+                        key_size=key_size,
+                        risk_level=risk_level,
+                        details=details_text,
+                        raw_data={
+                            "file": str(file_path),
+                            "line_number": line_num,
+                            "line_content": details_text,
+                            "pattern_matched": pattern
+                        }
+                    )
+
+                    findings.append(finding)
+                    logger.debug(f"Found {algorithm} at {file_path}:{line_num}")
+
+            except re.error as e:
+                logger.warning(f"Invalid regex pattern '{pattern}': {e}")
+                continue
+            except Exception as e:
+                logger.warning(f"Error processing line {line_num} in {file_path}: {e}")
+                continue
 
         return findings
 
@@ -141,17 +174,21 @@ class CodeScanner:
         """
         # Common key size patterns
         key_size_patterns = [
-            r'key_size\s*=\s*(\d+)',
+            r'key_size\s*[=:]\s*(\d+)',
             r'(\d+)[-\s]?bit',
             r'rsa[-_]?(\d+)',
+            r'RSA[-_]?(\d+)',
         ]
 
         for pattern in key_size_patterns:
-            match = re.search(pattern, line, re.IGNORECASE)
-            if match:
-                try:
-                    return int(match.group(1))
-                except (ValueError, IndexError):
-                    continue
+            try:
+                match = re.search(pattern, line, re.IGNORECASE)
+                if match:
+                    key_size = int(match.group(1))
+                    # Validate key size is reasonable (128 to 16384 bits)
+                    if 128 <= key_size <= 16384:
+                        return key_size
+            except (ValueError, IndexError):
+                continue
 
         return None

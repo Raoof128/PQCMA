@@ -15,10 +15,8 @@ from .reporting.console_reporter import ConsoleReporter
 from .reporting.json_reporter import JSONReporter
 from .reporting.html_reporter import HTMLReporter
 from .utils.logging_utils import setup_logger, get_logger
+from .utils.file_utils import validate_output_path
 from . import __version__
-
-
-logger = get_logger(__name__)
 
 
 class PQCAuditorCLI:
@@ -26,7 +24,18 @@ class PQCAuditorCLI:
     Command-line interface for the PQC Migration Auditor.
     """
 
-    def __init__(self):
+    def __init__(self, verbose: bool = False):
+        """
+        Initialize the CLI.
+
+        Args:
+            verbose: Enable verbose logging
+        """
+        # Setup logging first
+        setup_logger('pqc_migration_auditor', verbose=verbose)
+        self.logger = get_logger(__name__)
+
+        # Initialize components
         self.code_scanner = CodeScanner()
         self.cert_scanner = CertificateScanner()
         self.pcap_scanner = PCAPScanner()
@@ -45,30 +54,75 @@ class PQCAuditorCLI:
         Returns:
             Exit code (0 for success, non-zero for error)
         """
-        # Setup logging
-        setup_logger(__name__, verbose=args.verbose)
+        self.logger.info(f"PQC Migration Auditor v{__version__}")
+        self.logger.info(f"Mode: {args.mode}")
+        self.logger.info(f"Target: {args.target}")
 
-        logger.info(f"PQC Migration Auditor v{__version__}")
-        logger.info(f"Mode: {args.mode}")
-        logger.info(f"Target: {args.target}")
+        # Validate output paths before scanning
+        if args.output_json:
+            json_path = validate_output_path(args.output_json, '.json')
+            if not json_path:
+                self.logger.error(f"Invalid JSON output path: {args.output_json}")
+                print(f"Error: Invalid JSON output path: {args.output_json}", file=sys.stderr)
+                return 1
+            args.output_json = json_path
+
+        if args.output_html:
+            html_path = validate_output_path(args.output_html, '.html')
+            if not html_path:
+                self.logger.error(f"Invalid HTML output path: {args.output_html}")
+                print(f"Error: Invalid HTML output path: {args.output_html}", file=sys.stderr)
+                return 1
+            args.output_html = html_path
 
         # Run scan based on mode
         findings: List[Finding] = []
 
-        if args.mode == "code":
-            findings = self._scan_code(args.target)
-        elif args.mode == "pcap":
-            findings = self._scan_pcap(args.target)
-        else:
-            logger.error(f"Unknown mode: {args.mode}")
+        try:
+            if args.mode == "code":
+                findings = self._scan_code(args.target)
+            elif args.mode == "pcap":
+                findings = self._scan_pcap(args.target)
+            else:
+                self.logger.error(f"Unknown mode: {args.mode}")
+                return 1
+
+        except KeyboardInterrupt:
+            print("\n\nScan interrupted by user", file=sys.stderr)
+            return 130
+        except Exception as e:
+            self.logger.error(f"Error during scan: {e}", exc_info=True)
+            print(f"Error during scan: {e}", file=sys.stderr)
             return 1
 
+        # Check if any findings were generated
+        if not findings:
+            if not args.quiet:
+                print("\n✓ No quantum-vulnerable cryptography detected!")
+                print("  Your code appears to be using quantum-safe algorithms or no detectable crypto.")
+            return 0
+
         # Generate recommendations
-        logger.info("Generating PQC migration recommendations...")
-        recommendations = [self.rec_engine.analyze_finding(f) for f in findings]
+        self.logger.info("Generating PQC migration recommendations...")
+        recommendations = []
+        try:
+            recommendations = [self.rec_engine.analyze_finding(f) for f in findings]
+        except Exception as e:
+            self.logger.error(f"Error generating recommendations: {e}", exc_info=True)
+            print(f"Warning: Could not generate recommendations: {e}", file=sys.stderr)
 
         # Generate summary
-        summary = self.rec_engine.generate_report_summary(findings, recommendations)
+        try:
+            summary = self.rec_engine.generate_report_summary(findings, recommendations)
+        except Exception as e:
+            self.logger.error(f"Error generating summary: {e}", exc_info=True)
+            summary = {
+                "total_findings": len(findings),
+                "critical_count": len([f for f in findings if f.risk_level == "QUANTUM_VULNERABLE"]),
+                "findings_by_type": {},
+                "findings_by_risk": {},
+                "algorithms_detected": {}
+            }
 
         # Get migration checklist
         migration_checklist = self.rec_engine.get_migration_checklist()
@@ -81,43 +135,62 @@ class PQCAuditorCLI:
 
         # Console output (unless --quiet)
         if not args.quiet:
-            self.console_reporter.print_report(
-                findings,
-                recommendations,
-                summary,
-                scan_metadata
-            )
+            try:
+                self.console_reporter.print_report(
+                    findings,
+                    recommendations,
+                    summary,
+                    scan_metadata
+                )
+            except Exception as e:
+                self.logger.error(f"Error printing console report: {e}", exc_info=True)
+                print(f"Warning: Error displaying report: {e}", file=sys.stderr)
 
         # JSON output
         if args.output_json:
-            logger.info(f"Writing JSON report to: {args.output_json}")
-            json_report = self.json_reporter.generate_report(
-                findings,
-                recommendations,
-                summary,
-                scan_metadata,
-                migration_checklist
-            )
-            self.json_reporter.write_report(json_report, Path(args.output_json))
+            try:
+                self.logger.info(f"Writing JSON report to: {args.output_json}")
+                json_report = self.json_reporter.generate_report(
+                    findings,
+                    recommendations,
+                    summary,
+                    scan_metadata,
+                    migration_checklist
+                )
+                self.json_reporter.write_report(json_report, args.output_json)
+                if not args.quiet:
+                    print(f"\n✓ JSON report saved to: {args.output_json}")
+            except Exception as e:
+                self.logger.error(f"Error writing JSON report: {e}", exc_info=True)
+                print(f"Error writing JSON report: {e}", file=sys.stderr)
 
         # HTML output
         if args.output_html:
-            logger.info(f"Writing HTML report to: {args.output_html}")
-            html_report = self.html_reporter.generate_report(
-                findings,
-                recommendations,
-                summary,
-                scan_metadata,
-                migration_checklist
-            )
-            self.html_reporter.write_report(html_report, Path(args.output_html))
+            try:
+                self.logger.info(f"Writing HTML report to: {args.output_html}")
+                html_report = self.html_reporter.generate_report(
+                    findings,
+                    recommendations,
+                    summary,
+                    scan_metadata,
+                    migration_checklist
+                )
+                self.html_reporter.write_report(html_report, args.output_html)
+                if not args.quiet:
+                    print(f"✓ HTML report saved to: {args.output_html}")
+            except Exception as e:
+                self.logger.error(f"Error writing HTML report: {e}", exc_info=True)
+                print(f"Error writing HTML report: {e}", file=sys.stderr)
 
         # Summary message
         if not args.quiet:
-            print(f"\nScan complete: {len(findings)} findings, {summary['critical_count']} quantum-vulnerable")
+            critical_count = summary.get('critical_count', 0)
+            print(f"\n{'='*80}")
+            print(f"Scan complete: {len(findings)} findings, {critical_count} quantum-vulnerable")
+            print(f"{'='*80}\n")
 
         # Return non-zero if quantum-vulnerable findings detected
-        return 1 if summary['critical_count'] > 0 else 0
+        return 1 if summary.get('critical_count', 0) > 0 else 0
 
     def _scan_code(self, target_path: str) -> List[Finding]:
         """
@@ -129,23 +202,31 @@ class PQCAuditorCLI:
         Returns:
             List of findings
         """
-        path = Path(target_path)
+        path = Path(target_path).resolve()
 
         if not path.exists():
-            logger.error(f"Target path does not exist: {target_path}")
-            return []
+            self.logger.error(f"Target path does not exist: {target_path}")
+            raise FileNotFoundError(f"Target path does not exist: {target_path}")
+
+        if not path.is_dir():
+            self.logger.error(f"Target path is not a directory: {target_path}")
+            raise NotADirectoryError(f"Target path is not a directory: {target_path}")
 
         findings: List[Finding] = []
 
         # Code scanning
-        logger.info("Scanning source code...")
+        self.logger.info("Scanning source code...")
         code_findings = self.code_scanner.scan_directory(path)
         findings.extend(code_findings)
 
         # Certificate scanning
-        logger.info("Scanning certificates...")
-        cert_findings = self.cert_scanner.scan_directory(path)
-        findings.extend(cert_findings)
+        self.logger.info("Scanning certificates...")
+        try:
+            cert_findings = self.cert_scanner.scan_directory(path)
+            findings.extend(cert_findings)
+        except Exception as e:
+            self.logger.warning(f"Certificate scanning failed: {e}")
+            # Continue without cert findings
 
         return findings
 
@@ -159,13 +240,17 @@ class PQCAuditorCLI:
         Returns:
             List of findings
         """
-        path = Path(target_path)
+        path = Path(target_path).resolve()
 
         if not path.exists():
-            logger.error(f"PCAP file does not exist: {target_path}")
-            return []
+            self.logger.error(f"PCAP file does not exist: {target_path}")
+            raise FileNotFoundError(f"PCAP file does not exist: {target_path}")
 
-        logger.info("Scanning PCAP file...")
+        if not path.is_file():
+            self.logger.error(f"PCAP path is not a file: {target_path}")
+            raise ValueError(f"PCAP path is not a file: {target_path}")
+
+        self.logger.info("Scanning PCAP file...")
         findings = self.pcap_scanner.scan_pcap(path)
 
         return findings
@@ -263,13 +348,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        cli = PQCAuditorCLI()
+        cli = PQCAuditorCLI(verbose=args.verbose)
         return cli.run(args)
     except KeyboardInterrupt:
         print("\n\nInterrupted by user", file=sys.stderr)
         return 130
     except Exception as e:
+        # Setup basic logger for uncaught exceptions
+        logger = get_logger(__name__)
         logger.error(f"Unexpected error: {e}", exc_info=True)
+        print(f"Unexpected error: {e}", file=sys.stderr)
+        print("Run with --verbose for more details", file=sys.stderr)
         return 1
 
 

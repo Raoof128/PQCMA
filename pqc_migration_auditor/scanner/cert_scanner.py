@@ -9,14 +9,22 @@ from ..analysis.rules import CryptoKnowledgeBase, RiskLevel
 from ..utils.logging_utils import get_logger
 from ..utils.file_utils import find_scannable_files, is_certificate_file
 
+# Try to import cryptography, but make it optional
 try:
     from cryptography import x509
     from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import rsa, dsa, ec
     CRYPTO_AVAILABLE = True
-except ImportError:
+except (ImportError, Exception):
+    # Crypto library not available or broken - scanner will be disabled
     CRYPTO_AVAILABLE = False
+    x509 = None
+    default_backend = None
+    serialization = None
+    rsa = None
+    dsa = None
+    ec = None
 
 
 logger = get_logger(__name__)
@@ -29,6 +37,8 @@ class CertificateScanner:
 
     def __init__(self):
         self.knowledge_base = CryptoKnowledgeBase()
+        if not CRYPTO_AVAILABLE:
+            logger.warning("Cryptography library not available - certificate scanning disabled")
 
     def scan_directory(self, directory_path: Path) -> List[Finding]:
         """
@@ -41,7 +51,7 @@ class CertificateScanner:
             List of findings
         """
         if not CRYPTO_AVAILABLE:
-            logger.warning("cryptography library not available - skipping certificate scanning")
+            logger.debug("Certificate scanning skipped - cryptography library not available")
             return []
 
         logger.info(f"Scanning certificates in: {directory_path}")
@@ -111,6 +121,9 @@ class CertificateScanner:
         Returns:
             Finding if vulnerable algorithm detected, None otherwise
         """
+        if not CRYPTO_AVAILABLE:
+            return None
+
         try:
             # Try PEM format
             cert = x509.load_pem_x509_certificate(content, default_backend())
@@ -171,6 +184,9 @@ class CertificateScanner:
         Returns:
             Finding if vulnerable algorithm detected, None otherwise
         """
+        if not CRYPTO_AVAILABLE:
+            return None
+
         try:
             # Try to load as private key (PEM format, no password)
             private_key = serialization.load_pem_private_key(
