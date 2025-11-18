@@ -1,0 +1,49 @@
+# Application Configuration
+# Contains quantum-vulnerable cryptographic settings
+
+security:
+  # TLS Configuration - QUANTUM VULNERABLE
+  tls:
+    cipher_suites:
+      - TLS_RSA_WITH_AES_256_GCM_SHA384
+      - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+      - TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA
+    min_version: "1.2"
+    certificate: "/etc/ssl/certs/server-rsa-2048.crt"
+    private_key: "/etc/ssl/private/server-rsa-2048.key"
+
+  # SSH Configuration - QUANTUM VULNERABLE
+  ssh:
+    host_key_algorithms:
+      - ssh-rsa
+      - ecdsa-sha2-nistp256
+      - ecdsa-sha2-nistp384
+    key_exchange:
+      - diffie-hellman-group14-sha256
+      - ecdh-sha2-nistp256
+
+  # API Signing - QUANTUM VULNERABLE
+  api:
+    signing_algorithm: "RSA-SHA256"
+    key_size: 2048
+    signature_format: "PKCS1v15"
+
+database:
+  # Database connection encryption - QUANTUM VULNERABLE
+  ssl:
+    enabled: true
+    cipher: "ECDHE-RSA-AES256-GCM-SHA384"
+    cert: "/var/lib/postgresql/server.crt"
+
+certificates:
+  # Certificate authority settings
+  ca:
+    algorithm: "RSA"
+    key_size: 4096  # Still quantum vulnerable
+    signature_algorithm: "sha384WithRSAEncryption"
+
+# MIGRATION NOTE: All cryptographic algorithms above are vulnerable to quantum attacks
+# Recommended migration path:
+#   - RSA key exchange → ML-KEM (CRYSTALS-Kyber)
+#   - RSA/ECDSA signatures → ML-DSA (CRYSTALS-Dilithium)
+#   - ECDH key exchange → ML-KEM or hybrid approach

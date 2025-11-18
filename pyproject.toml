@@ -1,0 +1,95 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pqc-migration-auditor"
+version = "1.0.0"
+description = "A Python tool to identify quantum-vulnerable cryptography and recommend NIST/ASD-aligned post-quantum alternatives"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Australian Cybersecurity Engineer"}
+]
+maintainers = [
+    {name = "Australian Cybersecurity Engineer"}
+]
+keywords = [
+    "post-quantum",
+    "cryptography",
+    "security",
+    "quantum",
+    "pqc",
+    "nist",
+    "asd",
+    "migration",
+    "audit",
+    "vulnerability-scanner"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "Topic :: Security",
+    "Topic :: Security :: Cryptography",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "cryptography>=41.0.0",
+]
+
+[project.optional-dependencies]
+pcap = ["scapy>=2.5.0"]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+]
+all = [
+    "scapy>=2.5.0",
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+]
+
+[project.scripts]
+pqc-auditor = "pqc_migration_auditor.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/pqc-migration-auditor"
+Documentation = "https://github.com/yourusername/pqc-migration-auditor#readme"
+Repository = "https://github.com/yourusername/pqc-migration-auditor"
+Issues = "https://github.com/yourusername/pqc-migration-auditor/issues"
+
+[tool.setuptools]
+packages = ["pqc_migration_auditor"]
+
+[tool.setuptools.package-data]
+pqc_migration_auditor = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=pqc_migration_auditor --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["pqc_migration_auditor"]
+omit = ["*/tests/*", "*/test_*.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]

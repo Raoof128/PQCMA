@@ -1,0 +1,14 @@
+# PQC Migration Auditor - Requirements
+# Python 3.11+ required
+
+# Core dependencies
+cryptography>=41.0.0  # For certificate parsing and crypto operations
+scapy>=2.5.0  # For PCAP analysis (optional but recommended)
+
+# Development dependencies (optional)
+pytest>=7.4.0  # For running tests
+pytest-cov>=4.1.0  # For code coverage
+
+# Note: scapy may require additional system dependencies:
+# - Linux: sudo apt-get install tcpdump
+# - macOS: brew install libpcap
